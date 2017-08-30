@@ -50,6 +50,8 @@ char *file;
 WINDOW *pos_win;
 WINDOW *hex_win;
 WINDOW *ascii_win;
+/* Dimensions of the windows */
+int win_width;
 
 /* The main editor loop */
 int start () {
@@ -84,10 +86,16 @@ int start () {
                 wmove (hex_win, cur_y, cur_x);
                 break;
             default:
-                wprintw (hex_win, "%c", input);
+                mvwprintw (hex_win, cur_y, cur_x, "%c", input);
                 cur_x++;
+                cur_x = MAX(cur_x, 1);
                 break;
         }
+
+        /* Skip the blank spaces between bytes */
+        if ((cur_x) % 3 == 0)
+            cur_x++;
+        wmove (hex_win, cur_y, cur_x);
         wrefresh (hex_win);
     }
     return 0;
@@ -194,7 +202,8 @@ int main (int argc, char **argv) {
     memset (w, 0, sizeof (window_t));
     w->x = 11;
     w->y = 0;
-    w->width = (COLS - 11) / 2;
+    win_width = (COLS - 11) / 2;
+    w->width = win_width;
     w->height = LINES;
     memcpy (w->border, border, 6 * sizeof (chtype));
     hex_win = create_win (w);
@@ -205,7 +214,7 @@ int main (int argc, char **argv) {
     memset (w, 0, sizeof (window_t));
     w->x = 11 + (COLS - 11) / 2;
     w->y = 0;
-    w->width = ((COLS - 11) / 2) + 1;
+    w->width = win_width + 1;
     w->height = LINES;
     memcpy (w->border, border, 6 * sizeof (chtype));
     ascii_win = create_win (w);
