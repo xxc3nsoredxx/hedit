@@ -16,6 +16,7 @@
 #define MAKE_PRINT(X) (((X) < 0x20 || (X) > 0x7E) ? '.' : (X))
 #define MIN(X,Y) (((X) < (Y)) ? (X) : (Y))
 #define MAX(X,Y) (((X) > (Y)) ? (X) : (Y))
+#define UCASE(X) (((X) > 0x60 && (X) < 0x67) ? ((X) - 0x20) : (X))
 
 typedef struct window {
     int width;
@@ -38,6 +39,9 @@ int main (int, char**);
 /* Cursor position */
 int cur_x;
 int cur_y;
+/* Position in file */
+int file_x;
+int file_y;
 /* Lines of text that fit on screen */
 int text;
 /* File descriptor for the input file */
@@ -64,31 +68,50 @@ int start () {
     wmove (hex_win, cur_y, cur_x);
     wrefresh (hex_win);
     curs_set (1);
+    /* Initialize the position in file */
+    file_x = 0;
+    file_y = 0;
     
     while ((input = getch ()) != ESC) {
         switch (input) {
             case UP:
                 cur_y--;
                 cur_y = MAX(cur_y, 1);
+                file_y--;
+                file_y = MAX(file_y, 0);
                 wmove (hex_win, cur_y, cur_x);
                 break;
             case DOWN:
                 cur_y++;
+                file_x++;
                 wmove (hex_win, cur_y, cur_x);
                 break;
             case LEFT:
                 cur_x--;
                 cur_x = MAX(cur_x, 1);
+                file_x--;
+                file_x = MAX(file_x, 0);
                 wmove (hex_win, cur_y, cur_x);
                 break;
             case RIGHT:
                 cur_x++;
+                file_x++;
                 wmove (hex_win, cur_y, cur_x);
                 break;
             default:
-                mvwprintw (hex_win, cur_y, cur_x, "%c", input);
-                cur_x++;
-                cur_x = MAX(cur_x, 1);
+                if ((input >= 'a' && input <= 'f') ||
+                    (input >= '0' && input <= '9')) {
+                    mvwprintw (hex_win, cur_y, cur_x, "%c", UCASE(input));
+                    /* Currently treats each character of the dump as it's own
+                     * Fix this shit
+                     */
+                    *(file + (file_y * BYTES_PER_LINE) + file_x) =
+                        (char) UCASE(input);
+                    cur_x++;
+                    cur_x = MAX(cur_x, 1);
+                    file_x++;
+                    file_x = MAX(cur_x, 0);
+                }
                 break;
         }
 
