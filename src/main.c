@@ -13,6 +13,10 @@
 #define RIGHT 0x105
 
 #define BYTES_PER_LINE 8
+#define MAKE_ASCII(X) (((X) < 10) ? ((X) + 0x30) : ((X) - 9 + 0x40))
+#define MAKE_HEX(X) (((X) >= 0x30 && (X) <= 0x39)                      \
+                     ? ((X) - 0x30)                                    \
+                     : ((X) - 0x40 + 9))
 #define MAKE_PRINT(X) (((X) < 0x20 || (X) > 0x7E) ? '.' : (X))
 #define MIN(X,Y) (((X) < (Y)) ? (X) : (Y))
 #define MAX(X,Y) (((X) > (Y)) ? (X) : (Y))
@@ -31,6 +35,7 @@ typedef struct window {
 
 /* The functions used */
 int start ();
+void write_file ();
 void dump_file ();
 WINDOW* create_win (window_t*);
 void delete_win (WINDOW*);
@@ -39,7 +44,10 @@ int main (int, char**);
 /* Cursor position */
 int cur_x;
 int cur_y;
-/* Position in file */
+/* Position in file
+ * The y is counting the row
+ * The x is counting the nybbles
+ */
 int file_x;
 int file_y;
 /* Lines of text that fit on screen */
@@ -50,6 +58,8 @@ int fdes;
 off_t fsize;
 /* File is mmapped into here in 4096 byte chunks */
 char *file;
+/* Hex dump as ASCII */
+unsigned char *dump;
 /* Window objects */
 WINDOW *pos_win;
 WINDOW *hex_win;
@@ -79,34 +89,30 @@ int start () {
                 cur_y = MAX(cur_y, 1);
                 file_y--;
                 file_y = MAX(file_y, 0);
-                wmove (hex_win, cur_y, cur_x);
                 break;
             case DOWN:
                 cur_y++;
                 file_x++;
-                wmove (hex_win, cur_y, cur_x);
                 break;
             case LEFT:
                 cur_x--;
                 cur_x = MAX(cur_x, 1);
                 file_x--;
                 file_x = MAX(file_x, 0);
-                wmove (hex_win, cur_y, cur_x);
                 break;
             case RIGHT:
                 cur_x++;
                 file_x++;
-                wmove (hex_win, cur_y, cur_x);
                 break;
             default:
+                /* TODO
+                 * Fix this shit
+                 */
                 if ((input >= 'a' && input <= 'f') ||
                     (input >= '0' && input <= '9')) {
-                    mvwprintw (hex_win, cur_y, cur_x, "%c", UCASE(input));
-                    /* Currently treats each character of the dump as it's own
-                     * Fix this shit
-                     */
-                    *(file + (file_y * BYTES_PER_LINE) + file_x) =
-                        (char) UCASE(input);
+                    wprintw (hex_win, "%c", UCASE(input));
+                    *(dump + ((file_y * BYTES_PER_LINE)
+                              + file_x)) = UCASE(input);
                     cur_x++;
                     cur_x = MAX(cur_x, 1);
                     file_x++;
@@ -121,15 +127,40 @@ int start () {
         wmove (hex_win, cur_y, cur_x);
         wrefresh (hex_win);
     }
+
+    write_file ();
+
     return 0;
+}
+
+/* Writes the dump to the file */
+void write_file () {
+    int cx;
+    unsigned char temp;
+
+    FILE *log = fopen ("out.log", "w");
+
+    for (cx = 0; cx < fsize; cx++) {
+        temp = 0;
+        temp = (((unsigned char) MAKE_HEX(*(dump + cx))) << 4) & 0xF0;
+        temp |= (unsigned char) MAKE_HEX(*(dump + (cx + 1)));
+
+        fprintf (log, "%02X ", temp);
+
+        *(file + cx) = temp;
+    }
+
+    fclose (log);
 }
 
 /* Dumps a chunk of the file to the screen */
 void dump_file () {
     off_t cx;
 
-    /* Print the file to the screen */
+    /* Copy the file to the dump and print the file to the screen */
     for (cx = 0; cx < fsize; cx++) {
+        *(dump + cx) = MAKE_ASCII((*(file + cx) >> 4 & 0x0F));
+        *(dump + (cx + 1)) = MAKE_ASCII((*(file + cx) & 0x0F));
         /* Every 8 bytes, move to the next line */
         if (cx % BYTES_PER_LINE == 0) {
             wmove (pos_win, (cx / BYTES_PER_LINE) + 1, 1);
@@ -140,7 +171,8 @@ void dump_file () {
             wprintw (hex_win, " ");
         }
 
-        wprintw (hex_win, "%02X", *(file + cx));
+        wprintw (hex_win, "%c", *(dump + cx));
+        wprintw (hex_win, "%c", *(dump + (cx + 1)));
 
         wprintw (ascii_win, "%c", MAKE_PRINT(*(file + cx)));
 
@@ -156,8 +188,9 @@ WINDOW* create_win (window_t *w) {
 
     refresh ();
     ret = newwin (w->height, w->width, w->y, w->x);
-    wborder (ret, *((w->border) + 0), *((w->border) + 0), *((w->border) + 1),
-                  *((w->border) + 1), *((w->border) + 2), *((w->border) + 3),
+    wborder (ret, *((w->border) + 0), *((w->border) + 0),
+                  *((w->border) + 1), *((w->border) + 1),
+                  *((w->border) + 2), *((w->border) + 3),
                   *((w->border) + 4), *((w->border) + 5));
 
     wrefresh (ret);
@@ -205,6 +238,9 @@ int main (int argc, char **argv) {
     fsize = lseek (fdes, 0, SEEK_END);
     fsize = MIN(fsize,text);
     file = mmap (0, fsize, PROT_READ|PROT_WRITE, MAP_SHARED, fdes, 0);
+
+    /* Initialize the dump */
+    dump = malloc (fsize * 2);
 
     /* Disable the cursor until it's needed again */
     curs_set (0);
@@ -254,6 +290,7 @@ int main (int argc, char **argv) {
     endwin ();
 
     /* Free other used memory */
+    free (dump);
     munmap (file, fsize);
     close (fdes);
 
