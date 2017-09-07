@@ -8,5 +8,5 @@ all: hedit
 hedit: $(OBJS)
 	$(CC) $(OBJS) $(LFLAGS) -o hedit
 
-main.o: main.c
+main.o: main.c main.h
 	$(CC) $(CFLAGS) main.c
