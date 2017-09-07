@@ -1,6 +1,6 @@
 OBJS = main.o
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic-errors -std=c99 -c
+CFLAGS = -Wall -Wextra -pedantic-errors -std=c89 -c
 LFLAGS = -lncurses
 
 all: hedit

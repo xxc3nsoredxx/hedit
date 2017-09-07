@@ -135,46 +135,42 @@ int start () {
 
 /* Writes the dump to the file */
 void write_file () {
-    int cx;
+    off_t d_cx;
+    off_t f_cx;
     unsigned char temp;
 
-    FILE *log = fopen ("out.log", "w");
-
-    for (cx = 0; cx < fsize; cx++) {
+    for (d_cx = 0, f_cx = 0; f_cx < fsize; f_cx++, d_cx += 2) {
         temp = 0;
-        temp = (((unsigned char) MAKE_HEX(*(dump + cx))) << 4) & 0xF0;
-        temp |= (unsigned char) MAKE_HEX(*(dump + (cx + 1)));
+        temp = (MAKE_HEX(*(dump + d_cx)) << 4) & 0xF0;
+        temp |= (MAKE_HEX(*(dump + (d_cx + 1)))) & 0x0F;
 
-        fprintf (log, "%02X ", temp);
-
-        *(file + cx) = temp;
+        *(file + f_cx) = temp;
     }
-
-    fclose (log);
 }
 
 /* Dumps a chunk of the file to the screen */
 void dump_file () {
-    off_t cx;
+    off_t f_cx;
+    off_t d_cx;
 
     /* Copy the file to the dump and print the file to the screen */
-    for (cx = 0; cx < fsize; cx++) {
-        *(dump + cx) = MAKE_ASCII((*(file + cx) >> 4 & 0x0F));
-        *(dump + (cx + 1)) = MAKE_ASCII((*(file + cx) & 0x0F));
+    for (f_cx = 0, d_cx = 0; f_cx < fsize; f_cx++, d_cx += 2) {
+        *(dump + d_cx) = MAKE_ASCII((*(file + f_cx) >> 4 & 0x0F));
+        *(dump + (d_cx + 1)) = MAKE_ASCII((*(file + f_cx) & 0x0F));
         /* Every 8 bytes, move to the next line */
-        if (cx % BYTES_PER_LINE == 0) {
-            wmove (pos_win, (cx / BYTES_PER_LINE) + 1, 1);
-            wmove (hex_win, (cx / BYTES_PER_LINE) + 1, 1);
-            wmove (ascii_win, (cx / BYTES_PER_LINE) + 1, 1);
-            wprintw (pos_win, "%08X:", cx);
+        if (f_cx % BYTES_PER_LINE == 0) {
+            wmove (pos_win, (f_cx / BYTES_PER_LINE) + 1, 1);
+            wmove (hex_win, (f_cx / BYTES_PER_LINE) + 1, 1);
+            wmove (ascii_win, (f_cx / BYTES_PER_LINE) + 1, 1);
+            wprintw (pos_win, "%08X:", f_cx);
         } else {
             wprintw (hex_win, " ");
         }
 
-        wprintw (hex_win, "%c", *(dump + cx));
-        wprintw (hex_win, "%c", *(dump + (cx + 1)));
+        wprintw (hex_win, "%c", *(dump + d_cx));
+        wprintw (hex_win, "%c", *(dump + (d_cx + 1)));
 
-        wprintw (ascii_win, "%c", MAKE_PRINT(*(file + cx)));
+        wprintw (ascii_win, "%c", MAKE_PRINT(*(file + f_cx)));
 
         wrefresh (pos_win);
         wrefresh (hex_win);
